@@ -1,197 +1,220 @@
-# Інструкція запуску — ГІБРИДНИЙ перекладач для Zoom (Qwen + OpenAI)
+# Setup guide — hybrid Zoom translator (Qwen + OpenAI)
 
-> **Гібрид:** напрямок «співрозмовник → ви» — **Qwen** (українським текстом, миттєво,
-> безкоштовно); напрямок «ви → співрозмовник» — **OpenAI gpt-realtime-translate**
-> (англійський голос, низька затримка). Потрібні **обидва ключі** у `.env`.
+> **Hybrid:** the "other participant → you" direction runs on **Qwen**
+> (instant, free, text output); the "you → other participant" direction runs
+> on **OpenAI's `gpt-realtime-translate`** (spoken English, low latency).
+> **Both keys** are required in `.env`.
 >
-> Обмеження: OpenAI озвучує лише ~13 мов (українська **не** серед них — тому вона
-> лишилась на Qwen для тексту). `--clone` і `--only-mine` у цьому режимі **не діють**
-> (gpt-realtime-translate не клонує голос). Голос співрозмовника — генеричний.
+> Limitation: OpenAI only synthesizes ~13 languages (Ukrainian is **not**
+> one of them — that's why that leg stays on Qwen for text). `--clone` and
+> `--only-mine` **do nothing** in this mode (`gpt-realtime-translate` doesn't
+> clone voices). The other participant's voice is a generic one.
 
-## 🌐 Веб-інтерфейс (найзручніше)
+## 🌐 Web UI (easiest)
 
 ```bash
-cd "/Users/user/Documents/Projects/GPT real-time translator"
+cd "GPT real-time translator"
 python3 web.py
 ```
-Відкриється `http://localhost:8000` у браузері:
-- зверху — вибір мови співрозмовника, мікрофон, кнопка **Старт/Стоп**, статус, час і ≈ціна;
-- ліва панель (крупно) — **переклад слів співрозмовника вашою мовою** (читаєте);
-- права панель — що **чує співрозмовник** англійською (голос іде в Zoom).
-- галочка «чути свій переклад» — дублює англ. голос у ваші навушники (для тесту).
+Opens `http://localhost:8000` in the browser:
+- top bar — the other participant's language, microphone, **Start/Stop**, status, elapsed time and ≈cost;
+- left panel (large) — **translation of what the other participant says**, in your language (you read it);
+- right panel — what **the other participant hears** in English (the voice goes into Zoom).
+- "hear my own translation" checkbox — duplicates the English voice into your own headphones (for testing).
 
-Двигун той самий (Qwen вхід-текст + OpenAI вихід-голос) — браузер лише показує й керує.
-Zoom і BlackHole налаштовуються так само (розділи нижче). Ctrl+C у терміналі — вихід.
+Same engine underneath (Qwen text-in + OpenAI voice-out) — the browser is just the UI on top.
+Zoom and BlackHole are set up the same way (sections below). Ctrl+C in the terminal to quit.
 
-## 0. Які пристрої обирати в Zoom
+## 0. Which devices to pick in Zoom
 
-⚠️ **BlackHole перейменувати НЕ можна** (драйверні пристрої в Audio MIDI Setup мають
-заблоковану назву). Тому просто запам'ятайте відповідність — у Zoom це обирається
-один раз, далі Zoom пам'ятає:
+⚠️ **BlackHole device names can't be changed** (driver devices in Audio MIDI
+Setup have locked names). So just remember the mapping — Zoom only asks
+once and remembers it after:
 
-| У Zoom | Пристрій | Підказка |
+| In Zoom | Device | Hint |
 |---|---|---|
-| **Microphone** | `BlackHole 2ch` | **2** = мікрофон |
-| **Speaker** | `BlackHole 16ch` | **16** = слухаєте співрозмовника |
+| **Microphone** | `BlackHole 2ch` | **2** = microphone |
+| **Speaker** | `BlackHole 16ch` | **16** = you're listening to the other participant |
 
-**(Опційно) Назвати через агрегати:** агрегати перейменовуються, тож можна обгорнути
-кожен BlackHole в агрегат із назвою `Translate Microphone` / `Translate Speaker`
-(Audio MIDI Setup → `+` → Create Aggregate Device → відмітити один BlackHole →
-перейменувати). Скрипт усе одно використовує сирий BlackHole. Мінус — зайвий шар і
-можливий ресемплінг, тож надійніше лишити як є.
+**(Optional) Rename via aggregate devices:** aggregate devices CAN be
+renamed, so you can wrap each BlackHole in an aggregate named
+`Translate Microphone` / `Translate Speaker` (Audio MIDI Setup → `+` →
+Create Aggregate Device → check one BlackHole → rename). The script still
+talks to the raw BlackHole device either way. Downside: an extra layer and
+possible resampling, so leaving it as-is is more reliable.
 
-## 1. Один раз: ДВА ключі API
+## 1. One-time setup: two API keys
 
-Файл `.env` має містити **обидва** ключі:
+`.env` must contain **both** keys:
 ```
-DASHSCOPE_API_KEY=sk-...   # Qwen (міжнародна консоль Model Studio) — напрямок до вас
-OPENAI_API_KEY=sk-...      # OpenAI (platform.openai.com) — напрямок до співрозмовника
+DASHSCOPE_API_KEY=sk-...   # Qwen (international Model Studio console) — direction toward you
+OPENAI_API_KEY=sk-...      # OpenAI (platform.openai.com) — direction toward the other participant
 ```
 
-**Перевірка ключа OpenAI + протоколу** (без мікрофона, прожене укр→en через API):
+**Verify the OpenAI key + protocol** (no microphone needed, runs uk→en through the API):
 ```bash
 python3 probe_openai.py
 ```
-Має показати переклад англійською + отримане аудіо. Якщо помилка — скинь мені вивід.
+Should print an English translation and return audio.
 
-## 2. Налаштування Zoom (кожен раз перевіряйте)
+## 2. Zoom setup (check every time)
 
 Zoom → **Settings → Audio**:
 - **Microphone** → `BlackHole 2ch`
 - **Speaker** → `BlackHole 16ch`
-  - *(опційно)* якщо хочете ще й ЧУТИ оригінал співрозмовника — створіть у Audio MIDI Setup **Multi-Output Device** (`BlackHole 16ch` + ваші навушники) і виберіть його як Speaker.
+  - *(optional)* if you also want to HEAR the other participant's original
+    voice, create a **Multi-Output Device** in Audio MIDI Setup
+    (`BlackHole 16ch` + your headphones) and select that as the Speaker.
 
-⚠️ **НАЙВАЖЛИВІШЕ проти рваного звуку у співрозмовника.** Zoom за замовчуванням
-обробляє мікрофон (шумодав/ехоподавлення/AGC) і **ріже синтезований голос**, бо
-вважає його «шумом». Локально звук плавний, а в Zoom рветься саме через це. Вимкніть:
+⚠️ **The single most important fix for choppy audio on the other end.** By
+default Zoom processes the microphone (noise suppression / echo
+cancellation / AGC) and **chops up the synthesized voice**, treating it as
+"noise". Locally the audio is smooth — it only breaks up once it hits Zoom.
+Turn these off:
 
-1. **Settings → Audio → Music and Professional Audio** → увімкнути
-   **«Original sound for musicians»**.
-2. Після цього в дзвінку (ліворуч угорі) має зʼявитися кнопка
-   **«Original sound: On»** — переконайтесь, що вона **увімкнена** (синя).
-3. Там же розкрийте опції й **вимкніть**:
+1. **Settings → Audio → Music and Professional Audio** → enable
+   **"Original sound for musicians"**.
+2. A **"Original Sound: On"** button should then appear top-left in the
+   call — make sure it's **on** (blue).
+3. In the same panel, expand the options and **disable**:
    - **Echo cancellation** → Off
-   - **High fidelity music mode** → On (рівніший звук) *(опційно)*
-4. **Settings → Audio → Background noise suppression** → **Low** або **Off**
-   (на «Auto/High» Zoom найсильніше ріже TTS).
+   - **High fidelity music mode** → On (smoother audio) *(optional)*
+4. **Settings → Audio → Background noise suppression** → **Low** or **Off**
+   (on "Auto/High" Zoom chops up TTS the hardest).
 
-## 3. Перед дзвінком
+## 3. Before the call
 
-- Надіньте **навушники** (щоб не було ехо).
-- Говоріть у **вбудований мікрофон MacBook** — НЕ в мікрофон навушників (Bluetooth впаде в HFP і звук рватиме).
+- Wear **headphones** (to avoid echo).
+- Speak into the **MacBook's built-in microphone** — NOT the headphone
+  mic (Bluetooth would drop to HFP quality and break up the audio).
 
-## 4. Запуск перекладача
+## 4. Running the translator
 
 ```bash
-cd "/Users/user/Documents/Projects/GPT real-time translator"
+cd "GPT real-time translator"
 python3 bidirectional.py --hear uk --speak en --mic MacBook
 ```
 
-Параметри:
-- `--hear uk` — якою мовою ВИ **читаєте** співрозмовника (Qwen, текст; українська).
-- `--speak en` — мова **голосу** для співрозмовника (OpenAI). Лише з 13 вихідних:
-  `en, de, fr, es, it, pt, nl, pl, ja, ko, zh, ru, ar`. Інші → помилка з підказкою.
-- `--mic MacBook` — гарантовано вбудований мікрофон (24 кГц для OpenAI).
-- ℹ️ Підказку мови джерела цей endpoint не приймає, але вона й не потрібна:
-  перевірено, що модель точно розпізнає українську без неї (чиста кирилиця).
-- `--delay 1.0` — пре-буфер аудіо для співрозмовника (плавність). Менше = швидше.
-- `--vad 300` — стосується лише напрямку **до вас** (Qwen-текст).
-- `--latency` — таймінги для діагностики.
-- `--quiet` — чистий вивід, лише переклад (для перевірки перед дзвінком).
-- ⚠️ `--clone` і `--only-mine` **ігноруються** — gpt-realtime-translate не клонує голос.
+Options:
+- `--hear uk` — the language YOU read the other participant's speech in
+  (Qwen, text).
+- `--speak en` — the **voice** language for the other participant (OpenAI).
+  Only 13 output languages supported: `en, de, fr, es, it, pt, nl, pl, ja,
+  ko, zh, ru, ar`. Anything else → an error with a hint.
+- `--mic MacBook` — guarantees the built-in mic (24 kHz for OpenAI).
+- ℹ️ This endpoint doesn't take a source-language hint, and it doesn't need
+  one — verified that the model reliably detects Ukrainian without it
+  (clean Cyrillic input).
+- `--delay 1.0` — audio pre-buffer for the other participant (smoothness).
+  Lower = faster.
+- `--vad 300` — only affects the **toward-you** direction (Qwen text).
+- `--latency` — timing info for diagnostics.
+- `--quiet` — clean output, translation only (for a pre-call check).
+- ⚠️ `--clone` and `--only-mine` are **ignored** — `gpt-realtime-translate`
+  doesn't clone voices.
 
-### Затримка у GPT-режимі
-OpenAI стримить переклад **під час** мови (не чекає 2-с паузи, як стара модель), тож
-напрямок до співрозмовника відчутно швидший. Все одно **говоріть смисловими
-фразами з мікропаузами** — модель озвучує по завершених клаузах (порядок слів між
-мовами різний, тому по-словесний синхрон неможливий — це межа всіх технологій).
-- Перевірити, що сервер приймає налаштування VAD: `python3 probe_session.py`.
+### Latency in GPT mode
+OpenAI streams the translation **while you're speaking** (it doesn't wait
+for a 2-second pause like the older model), so the toward-participant
+direction is noticeably faster. Still, **speak in complete phrases with
+short pauses** — the model synthesizes per finished clause (word order
+differs between languages, so word-by-word sync is impossible — that's a
+hard limit of the technology, not this implementation).
+- Verify the server accepts the VAD settings: `python3 probe_session.py`.
 
-У терміналі:
-- `[← ВАМ] 🌐 …` — переклад того, що каже співрозмовник (потоково)
-- `[ВИ →] 🌐 …` — переклад того, що пішло співрозмовнику
+In the terminal:
+- `[← TO YOU] 🌐 …` — translation of what the other participant is saying (streamed)
+- `[YOU →] 🌐 …` — translation of what went out to the other participant
 
-Вихід — **Ctrl+C**.
+Quit with **Ctrl+C**.
 
-## 4½. Чиста перевірка перед кожним дзвінком (`--quiet`)
+## 4½. Quick pre-call check (`--quiet`)
 
-Швидко переконатися, що все працює — **лише переклад, без жодного технічного шуму**:
+Fast sanity check that everything works — **translation only, no technical noise**:
 
 ```bash
 python3 bidirectional.py --hear uk --speak en --clone --mic MacBook \
   --monitor "External Headphones" --vad 300 --only-mine --quiet
 ```
 
-Що робити:
-1. Скажіть **коротку українську фразу** (напр. «Доброго дня, перевірка звʼязку.»).
-2. За ~1 с маєте **побачити** англійський переклад рядком і **почути** його в навушниках.
-3. Працює → закривайте (Ctrl+C) і починайте дзвінок.
+Steps:
+1. Say a **short phrase** in your language (e.g. "Good afternoon, testing the connection.").
+2. After ~1s you should **see** the English translation as text and **hear** it in your headphones.
+3. Works → close it (Ctrl+C) and start the call.
 
-`--quiet` прибирає JSON-конфіг, логи підключення, таймінги й VAD — на екрані лише:
+`--quiet` strips out the JSON config dump, connection logs, timings and VAD
+info — the screen shows only:
 ```
-[ВИ →] 🌐 Good day, communication check.
+[YOU →] 🌐 Good day, communication check.
 ```
-Якщо хочете назад технічні деталі для діагностики — заберіть `--quiet`, додайте `--latency`.
+To get the diagnostic details back, drop `--quiet` and add `--latency`.
 
-## 5. Тест без Zoom і без другої людини
+## 5. Testing without Zoom and without a second person
 
-**Найпростіше — сольний тест прямо в bidirectional.py:** додайте `--monitor`, і
-переклад для співрозмовника дублюватиметься ще й у ваші навушники. Говорите
-українською → одразу чуєте, як це звучить англійською (вашим клонованим голосом):
+**Simplest — a solo test right in `bidirectional.py`:** add `--monitor`,
+and the translation meant for the other participant is also duplicated
+into your own headphones. Speak in your language → immediately hear how it
+sounds in English (your cloned voice):
 
 ```bash
 python3 bidirectional.py --hear uk --speak en --clone --mic MacBook \
   --monitor "External Headphones" --vad 300 --only-mine --latency
 ```
 
-- `--only-mine` — не дублює назад вашу власну англійську (коли граєте «англійця»).
-  Рішення за **схожістю джерело↔переклад** (англ=англ → глушиться; українська,
-  навіть якщо ASR пише її латиницею, → озвучується). Цей режим **буферує фразу**
-  (рішення потрібне на повному перекладі), тож затримка трохи більша — це нормально
-  для сольного тесту.
-- **Аудіо за замовчуванням — плавний режим** (буферить фразу → без тріску). На
-  коротких фразах затримка ~1 с. `--stream` = потокове (раніше, але може тріщати).
-- Кажіть **короткими фразами з паузою** — кожна озвучиться окремо, швидко й плавно.
+- `--only-mine` — doesn't echo your own English back (for when you're
+  playing "the other participant"). Decided by **source↔translation
+  similarity** (English=English → muted; your language, even if ASR writes
+  it in Latin script, → still synthesized). This mode **buffers the whole
+  phrase** (the decision needs the full translation), so latency is a bit
+  higher — expected for a solo test.
+- **Default audio mode buffers each phrase** (no crackling). Short phrases
+  add ~1s latency. `--stream` = streaming mode (faster, but can crackle).
+- Speak in **short phrases with a pause** — each one gets synthesized
+  separately, fast and smooth.
 
-- `--only-mine` — озвучується **лише ваша рідна мова** (укр.). Коли ви граєте
-  «англійця» й говорите англійською — переклад НЕ дублюється назад у навушники
-  (вмикає розпізнавання джерела й вирішує за скриптом: кирилиця=ваше, латиниця=ні).
-  У терміналі англійський хід позначається `🔇 ... аудіо вимкнено`.
-- `--latency` — додає в чат позначки часу й затримки для аналізу:
-  `[12:34:56 +1.2с] 🌐 переклад …   ⏱ всього +2.4с`
-  (час появи першого слова; затримка від паузи; повна затримка до кінця фрази).
-- `--monitor` без значення → системний вихід (ваші навушники).
-- `--monitor Redmi` / `--monitor 2` → конкретний пристрій.
-- Монітор має **окремий потік і свій буфер** (`--monitor-delay`, дефолт 1.2 с), тож
-  не звʼязаний з основним виходом. Якщо у навушниках ще рветься — підніміть:
-  `--monitor-delay 2.0`. (Не плутайте з `--delay` — той лише для кабелю в Zoom.)
-- ⚠️ Обовʼязково `--mic MacBook` — говоріть у вбудований мікрофон, навушники лише
-  слухають (інакше Bluetooth впаде в HFP і звук рватиме).
-- Логіка: ви граєте «українця» (говорите укр.), чуєте відповідь англійською —
-  і відповідаєте «за англійця». Кабель `BlackHole 2ch` отримує те саме аудіо,
-  тож паралельно перевіряється і шлях у Zoom.
+- `--only-mine` — only **your own language** gets synthesized. When you're
+  playing "the other participant" and speaking English, the translation
+  is NOT echoed back into your headphones (it detects the source script and
+  decides: Cyrillic = yours, Latin = not). In the terminal, an English turn
+  is marked `🔇 ... audio muted`.
+- `--latency` — adds timestamps and latency figures to the log:
+  `[12:34:56 +1.2s] 🌐 translation …   ⏱ total +2.4s`
+  (time to first word; latency from the pause; total latency to end of phrase).
+- `--monitor` with no value → system output (your headphones).
+- `--monitor Redmi` / `--monitor 2` → a specific device.
+- The monitor has **its own stream and buffer** (`--monitor-delay`, default
+  1.2s), independent of the main output. If your headphones still crackle,
+  raise it: `--monitor-delay 2.0`. (Not to be confused with `--delay`,
+  which is only for the Zoom cable path.)
+- ⚠️ Always use `--mic MacBook` — speak into the built-in mic, headphones
+  are for listening only (otherwise Bluetooth drops to HFP quality and the
+  audio breaks up).
+- Flow: you play "the local speaker" (speak your language), hear the
+  English reply, and reply "as the foreign participant". The `BlackHole
+  2ch` cable receives the same audio, so the Zoom path is verified in
+  parallel.
 
 ```bash
-# або старі швидкі сценарії:
-python3 selftest.py in            # говорите англійською → читаєте українською
-python3 selftest.py out --clone   # говорите українською → чуєте англійською (ваш голос)
+# older quick scenarios:
+python3 selftest.py in            # speak English → read the translation in your language
+python3 selftest.py out --clone   # speak your language → hear English (your voice)
 
-# повний тест через реальні кабелі (2 термінали):
-python3 bidirectional.py --hear uk --speak en --clone --mic MacBook   # термінал 1
-python3 fake_zoom.py                                                   # термінал 2
+# full test over real virtual cables (2 terminals):
+python3 bidirectional.py --hear uk --speak en --clone --mic MacBook   # terminal 1
+python3 fake_zoom.py                                                   # terminal 2
 ```
 
-## 6. Якщо щось не так
+## 6. Troubleshooting
 
-| Симптом | Рішення |
+| Symptom | Fix |
 |---|---|
-| `DASHSCOPE_API_KEY не знайдено` | впишіть ключ у `.env` |
-| HTTP 401 | ключ не з міжнародної консолі (Сінгапур) |
-| `Не знайдено Translate Speaker/...` | `sudo killall coreaudiod`, потім `python3 list_devices.py` |
-| Звук рветься у СПІВРОЗМОВНИКА | у Zoom: Original Sound = On, Echo cancellation = Off, Background noise suppression = Low/Off (розділ 2) |
-| Звук рветься у ВАС (навушники) | говоріть у мікрофон MacBook (`--mic MacBook`), слухайте в навушниках |
-| Велика затримка | короткі речення + пауза; `--vad 300 --delay 0.4`; виміряти `--latency` |
-| Співрозмовник не чує | у Zoom Microphone = `Translate Microphone`, увімкнено Original Sound |
-| SSL помилка | `"/Applications/Python 3.14/Install Certificates.command"` |
+| `DASHSCOPE_API_KEY not found` | add the key to `.env` |
+| HTTP 401 | key isn't from the international console (Singapore region) |
+| `Translate Speaker/... not found` | `sudo killall coreaudiod`, then `python3 list_devices.py` |
+| Audio breaks up for the OTHER PARTICIPANT | in Zoom: Original Sound = On, Echo cancellation = Off, Background noise suppression = Low/Off (section 2) |
+| Audio breaks up for YOU (headphones) | speak into the MacBook mic (`--mic MacBook`), listen on headphones |
+| High latency | short sentences + pause; `--vad 300 --delay 0.4`; measure with `--latency` |
+| Other participant can't hear you | in Zoom, Microphone = `Translate Microphone`, Original Sound enabled |
+| SSL error | run `"/Applications/Python 3.14/Install Certificates.command"` |
 
-Перевірити пристрої будь-коли: `python3 list_devices.py`
+List devices any time: `python3 list_devices.py`

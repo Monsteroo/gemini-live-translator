@@ -1,64 +1,65 @@
 # GPT Real-Time Translator (Zoom hybrid voice translator)
 
-**TL;DR (EN):** Real-time bidirectional voice translator for Zoom calls, routed
-through virtual audio devices (BlackHole). Hybrid engine: incoming speech is
+Real-time bidirectional voice translator for Zoom calls, routed through
+virtual audio devices (BlackHole). Hybrid engine: incoming speech is
 transcribed/translated by **Qwen** (`qwen3.5-livetranslate-flash-realtime`,
 60 languages, low cost) into on-screen text; outgoing speech is translated
-and re-synthesized by **OpenAI's realtime translate API** into spoken English
-so the other participant hears you translated live. Round-trip latency
-brought down from ~15s (naive STT → LLM → TTS pipeline) to ~3s by streaming
-both legs concurrently instead of sequentially. Ships both a CLI (`main.py`)
-and a local web UI (`web.py` + `webui.html`) with live status, running cost
-estimate, and a "hear your own translation" monitor toggle.
+and re-synthesized by **OpenAI's realtime translate API** into spoken
+English, so the other participant hears you translated live. Round-trip
+latency was brought down from ~15s (a naive sequential STT → LLM → TTS
+pipeline) to ~3s by streaming both directions concurrently instead of one
+after another. Ships both a CLI (`main.py`) and a local web UI (`web.py` +
+`webui.html`) with live status, a running cost estimate, and a
+"hear your own translation" monitor toggle.
 
-## Чому гібрид
+## Why a hybrid engine
 
-- **Співрозмовник → ви**: Qwen (`qwen3.5-livetranslate-flash-realtime`) —
-  текст миттєво, дешево, підтримує 60 мов (29 із синтезом голосу).
-- **Ви → співрозмовник**: OpenAI `gpt-realtime-translate` — озвучує ваш
-  переклад англійською з низькою затримкою. Обмеження: OpenAI озвучує лише
-  ~13 мов, українська не серед них — тому цей напрямок завжди йде в текст
-  через Qwen, а голос генерує OpenAI.
+- **Other participant → you**: Qwen (`qwen3.5-livetranslate-flash-realtime`)
+  — instant text, cheap, supports 60 languages (29 with synthesized voice).
+- **You → other participant**: OpenAI `gpt-realtime-translate` — speaks
+  your translation out loud in English with low latency. Limitation: OpenAI
+  only synthesizes ~13 languages, and Ukrainian isn't one of them — so that
+  direction always goes through Qwen for text, with OpenAI generating the
+  voice.
 
-Обидва легі працюють паралельно (не послідовно), звідси падіння затримки
-з ~15с до ~3с.
+Both legs run concurrently rather than sequentially, which is what cuts
+round-trip latency from ~15s to ~3s.
 
-## Архітектура
+## Architecture
 
 ```
-Мікрофон → BlackHole 2ch → Zoom "Microphone"
-Zoom "Speaker" → BlackHole 16ch → цей скрипт → переклад → навушники/вихід
+Microphone → BlackHole 2ch → Zoom "Microphone"
+Zoom "Speaker" → BlackHole 16ch → this app → translation → headphones/output
 ```
 
-- `main.py` — CLI-запуск гібридного перекладача.
-- `web.py` + `webui.html` — локальний веб-інтерфейс (вибір мови, старт/стоп,
-  дві панелі перекладу, лічильник вартості).
-- `bidirectional.py` — оркестрація двох одночасних напрямків перекладу.
+- `main.py` — CLI entry point for the hybrid translator.
+- `web.py` + `webui.html` — local web UI (language picker, start/stop, two
+  translation panels, running cost counter).
+- `bidirectional.py` — orchestrates both concurrent translation directions.
 - `openai_translate_client.py` / `gemini_translate_client.py` /
-  `livetranslate_client.py` — клієнти конкретних realtime-API.
-- `config.py` — мови, аудіо-девайси, завантаження `.env`.
-- `probe_*.py`, `selftest.py`, `test_english.py` — точкові перевірки
-  окремих API без повного запуску (ключ, протокол, транскрипція).
+  `livetranslate_client.py` — clients for the individual realtime APIs.
+- `config.py` — languages, audio device lookup, `.env` loading.
+- `probe_*.py`, `selftest.py`, `test_english.py` — targeted checks of
+  individual APIs without a full run (key validity, protocol, transcription).
 
-## Запуск
+## Running it
 
 ```bash
-cp .env.example .env   # вписати DASHSCOPE_API_KEY і OPENAI_API_KEY
+cp .env.example .env   # fill in DASHSCOPE_API_KEY and OPENAI_API_KEY
 python3 web.py          # -> http://localhost:8000
-# або
-python3 main.py          # CLI-режим
+# or
+python3 main.py          # CLI mode
 ```
 
-Налаштування Zoom/BlackHole та повний протокол — `INSTRUCTION.md` та
-`PERED-DZVINKOM.md`.
+Zoom/BlackHole setup and the full run protocol are in [`INSTRUCTION.md`](INSTRUCTION.md)
+and the pre-call checklist [`PERED-DZVINKOM.md`](PERED-DZVINKOM.md).
 
-## Вартість
+## Cost
 
-$0 інфраструктури — лише pay-per-use API (DashScope + OpenAI realtime),
-орієнтовно центи за дзвінок залежно від тривалості.
+$0 infrastructure — pay-per-use API calls only (DashScope + OpenAI realtime),
+roughly cents per call depending on duration.
 
-## Застереження
+## Caveats
 
-- Потрібні власні API-ключі (DashScope + OpenAI) — не входять у репозиторій.
-- BlackHole — сторонній віртуальний аудіодрайвер для macOS, встановлюється
-  окремо.
+- Requires your own API keys (DashScope + OpenAI) — not included in the repo.
+- BlackHole is a third-party virtual audio driver for macOS, installed separately.

@@ -1,16 +1,16 @@
-# Тестові діалоги для перевірки перекладу (~3 хв)
+# Test dialogues for checking translation quality (~3 min)
 
-Ділова розмова: український виконавець обговорює з англомовним клієнтом веб-проєкт.
+A business call: a Ukrainian contractor discusses a web project with an English-speaking client.
 
-**Як користуватися:**
-- 🇬🇧 — репліки англійця, 🇺🇦 — репліки українця.
-- Після кожної репліки робіть **паузу 1–2 с** — дайте перекладу прозвучати/зʼявитися.
-- Говоріть спокійно, цілими реченнями (так серверний VAD краще ділить мову).
+**How to use:**
+- 🇬🇧 — the English speaker's lines, 🇺🇦 — the Ukrainian speaker's lines.
+- After each line, **pause 1–2s** — let the translation play/appear.
+- Speak calmly, in full sentences (the server-side VAD segments speech better that way).
 
 ---
 
-## ВАРІАНТ 1 — повністю українською
-(для розуміння змісту або щоб ви самі зіграли обидві ролі)
+## VARIANT 1 — fully in Ukrainian
+(so a Ukrainian speaker can read/understand the content, or play both roles solo)
 
 🇬🇧 **Англієць:** Доброго дня! Дякую, що знайшли час сьогодні. Чи добре мене чути?
 🇺🇦 **Українець:** Доброго дня! Так, чую вас чудово. Дякую, що організували дзвінок.
@@ -31,8 +31,8 @@
 
 ---
 
-## ВАРІАНТ 2 — реальна двомовна розмова
-(англієць читає 🇬🇧 англійською, українець — 🇺🇦 українською)
+## VARIANT 2 — a real bilingual conversation
+(the English speaker reads 🇬🇧 in English, the Ukrainian speaker reads 🇺🇦 in Ukrainian)
 
 🇬🇧 **Englishman:** Hi, good afternoon! Thanks for making the time today. Can you hear me clearly?
 🇺🇦 **Українець:** Доброго дня! Так, чую вас чудово. Дякую, що організували дзвінок.

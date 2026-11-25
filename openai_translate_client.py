@@ -266,14 +266,8 @@ class OpenAITranslateClient:
             frames_per_buffer=self.input_chunk)
         if not self.quiet:
             print(f"{self.label}Microphone is on (24kHz → OpenAI). Start speaking...")
-        try:
-            while self.is_connected:
-                chunk = await asyncio.get_event_loop().run_in_executor(
-                    None, stream.read, self.input_chunk)
-                await self.send_audio_chunk(chunk)
-        finally:
-            stream.stop_stream()
-            stream.close()
+        from config import mic_loop
+        await mic_loop(stream, self.input_chunk, lambda: self.is_connected, self.send_audio_chunk)
 
     async def close(self):
         self.is_connected = False

@@ -7,6 +7,7 @@
 """
 import asyncio, base64, json, os, subprocess, sys, time, wave
 import websockets
+import sys as _sys, pathlib as _pl; _sys.path.insert(0, str(_pl.Path(__file__).resolve().parent.parent))  # project root
 from config import load_env, get_api_key, LANGUAGES
 
 PHRASE = "Hello! Can you hear me clearly? I think the new pricing looks reasonable, but I'd like to discuss the delivery timeline before we sign anything."

@@ -116,6 +116,14 @@ def get_gemini_key() -> str:
     return key
 
 
+def get_palabra_key() -> str:
+    # Palabra: один API-ключ (platform.palabra.ai/api-keys). Приймаємо кілька назв змінної.
+    for k in ("PALABRA_API_KEY", "PALABRA_CLIENT_SECRET"):
+        if os.environ.get(k):
+            return os.environ[k]
+    raise SystemExit("❌ PALABRA_API_KEY не знайдено у .env")
+
+
 # Назви віртуальних кабелів для пошуку. Скрипт працює з СИРИМ BlackHole, тому
 # шукаємо його ПЕРШИМ (щоб не зачепити однойменний агрегат-обгортку, який може
 # додавати ресемплінг). «Дружня» назва — лише як запасний варіант.
@@ -161,3 +169,30 @@ def list_devices(pyaudio_instance) -> None:
             io.append(f"OUT:{info['maxOutputChannels']}")
         print(f"  [{i}] {info['name']}  ({', '.join(io)})  @ {int(info['defaultSampleRate'])}Hz")
     print()
+
+
+async def mic_loop(stream, nframes, is_running, on_chunk):
+    """Читає мікрофон і віддає on_chunk(bytes). Потік закривається ЛИШЕ коли завершився
+    поточний stream.read — інакше PortAudio падає з SIGSEGV (закриття під час читання
+    в іншому потоці, напр. при Стоп). Скасування asyncio-future НЕ зупиняє потік, тому
+    чекаємо саме concurrent-future."""
+    import asyncio
+    import concurrent.futures as cf
+    cfut = None
+    try:
+        while is_running():
+            cfut = _MIC_POOL.submit(stream.read, nframes, False)
+            chunk = await asyncio.wrap_future(cfut)
+            await on_chunk(chunk)
+    finally:
+        if cfut is not None:
+            cf.wait([cfut], timeout=2.0)       # ≤ один 100-мс блок
+        try:
+            stream.stop_stream()
+            stream.close()
+        except Exception:
+            pass
+
+
+import concurrent.futures as _cf
+_MIC_POOL = _cf.ThreadPoolExecutor(max_workers=4, thread_name_prefix="mic")

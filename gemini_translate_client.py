@@ -22,6 +22,7 @@ NOTES:
   all-zero chunks so the playback buffer doesn't drift.
 - voiceName is IGNORED on the preview model (fixed female voice) — see memory.
 """
+import array
 import time
 import base64
 import asyncio
@@ -89,6 +90,34 @@ class GeminiTranslateClient:
 
         self._stream_buf = ""
 
+        # Режим тесту затримки: замість мікрофона шлемо підготовлене аудіо (у реальному
+        # темпі), а ключові моменти пишемо в _marks (time.monotonic()).
+        self._inject = bytearray()
+        self._marks = None
+        self._mute = False   # тест затримки: мікрофон заглушено (без стороннього шуму)
+
+    # ---------- latency probe ----------
+    def start_probe(self, pcm: bytes):
+        """Підмінити мікрофон на pcm (16kHz PCM16) і почати збирати часові мітки."""
+        self._marks = {}
+        self._inject = bytearray(pcm)
+
+    @staticmethod
+    def _is_loud(data: bytes, thr: int = 300) -> bool:
+        """Чи є в PCM16 справжній звук (модель шле й майже-тишу, не лише нулі)."""
+        s = array.array("h")
+        s.frombytes(data[: len(data) // 2 * 2])
+        return any(abs(x) > thr for x in s[::8])
+
+    def _mark(self, name: str, first_only: bool = True):
+        m = self._marks
+        if m is None or (name != "speech_start" and "speech_start" not in m):
+            return                      # ігноруємо хвости від попередніх фраз
+        if first_only:
+            m.setdefault(name, time.monotonic())
+        else:
+            m[name] = time.monotonic()
+
     async def connect(self):
         url = f"{WS_URL}?key={self.api_key}"
         try:
@@ -126,7 +155,7 @@ class GeminiTranslateClient:
             "mimeType": f"audio/pcm;rate={self.input_rate}"}}}))
 
     # ---------- playback (shared loop, main + monitor) ----------
-    def _player_loop(self, *, output_device_index, q, playback_delay, tag=""):
+    def _player_loop(self, *, output_device_index, q, playback_delay, tag="", mark=False):
         try:
             stream = self.pyaudio_instance.open(
                 format=self.output_format, channels=self.output_channels,
@@ -140,6 +169,7 @@ class GeminiTranslateClient:
         silence = b"\x00\x00" * int(self.output_rate * 0.02)    # 20ms тиші (анти-underrun)
         buf = bytearray()
         started = ended = False
+        idle = 0.0          # скільки вже немає даних (с)
         try:
             while not ended and (self.is_connected or not q.empty() or buf):
                 try:
@@ -161,10 +191,24 @@ class GeminiTranslateClient:
                         q.task_done()
                     except queue.Empty:
                         break
+                if buf:
+                    idle = 0.0
+                else:
+                    idle += 0.05
+                    # фраза скінчилась → наступну знову починаємо із запасу (jitter-буфер),
+                    # інакше звук «рве» через нерівномірний прихід чанків від моделі
+                    if started and idle > 1.0:
+                        started = False
                 if not started and not ended and len(buf) < prebuffer:
+                    if self.is_connected:   # тримаємо вихід живим тишею (анти-repeat)
+                        stream.write(silence)
                     continue
                 started = True
                 if buf:
+                    if mark and self._marks is not None and self._is_loud(bytes(buf)):
+                        # момент передачі реального звуку на пристрій
+                        self._mark("first_audio_play")
+                        self._mark("last_audio_play", first_only=False)
                     stream.write(bytes(buf))
                     buf.clear()
                 elif not ended and self.is_connected:
@@ -198,7 +242,7 @@ class GeminiTranslateClient:
                 target=lambda: self._player_loop(
                     output_device_index=self.output_device_index,
                     q=self.audio_playback_queue, playback_delay=self.playback_delay,
-                    tag="(основний)"), daemon=True)
+                    tag="(основний)", mark=True), daemon=True)
             self.audio_player_thread.start()
 
     # ---------- streaming text display ----------
@@ -223,7 +267,12 @@ class GeminiTranslateClient:
             async for message in self.ws:
                 event = json.loads(message)
                 sc = event.get("serverContent") or {}
+                if (sc.get("inputTranscription") or {}).get("text"):
+                    self._mark("first_in_text")
                 if sc.get("outputTranscription"):
+                    if sc["outputTranscription"].get("text"):
+                        self._mark("first_out_text")
+                        self._mark("last_out_text", first_only=False)
                     self._print_delta(sc["outputTranscription"].get("text") or "")
                 if self.log_latency and sc.get("inputTranscription"):
                     d = sc["inputTranscription"].get("text") or ""
@@ -237,6 +286,9 @@ class GeminiTranslateClient:
                         data = base64.b64decode(b64)
                         # пропускаємо filler-тишу, щоб буфер не дрейфував
                         if data.strip(b"\x00"):
+                            if self._marks is not None and self._is_loud(data):
+                                self._mark("first_audio_rx")
+                                self._mark("last_audio_rx", first_only=False)
                             self._enqueue_audio(data)
                 if "error" in event:
                     print(f"\n{self.label}[Gemini ERROR] "
@@ -257,14 +309,23 @@ class GeminiTranslateClient:
             frames_per_buffer=self.input_chunk)
         if not self.quiet:
             print(f"{self.label}Microphone is on (16kHz → Gemini). Start speaking...")
-        try:
-            while self.is_connected:
-                chunk = await asyncio.get_event_loop().run_in_executor(
-                    None, stream.read, self.input_chunk)
-                await self.send_audio_chunk(chunk)
-        finally:
-            stream.stop_stream()
-            stream.close()
+        from config import mic_loop
+
+        async def on_chunk(chunk):
+            if self._mute:
+                chunk = b"\x00" * len(chunk)
+            if self._inject:
+                # Тест затримки: мікрофон лише задає темп, звук — підготовлений.
+                n = self.input_chunk * 2
+                piece = bytes(self._inject[:n])
+                del self._inject[:n]
+                chunk = piece + b"\x00" * (n - len(piece))
+                self._mark("speech_start")
+                if not self._inject:
+                    self._mark("speech_end", first_only=False)
+            await self.send_audio_chunk(chunk)
+
+        await mic_loop(stream, self.input_chunk, lambda: self.is_connected, on_chunk)
 
     async def close(self):
         self.is_connected = False

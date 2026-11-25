@@ -10,6 +10,7 @@ import wave
 
 import websockets
 
+import sys as _sys, pathlib as _pl; _sys.path.insert(0, str(_pl.Path(__file__).resolve().parent.parent))  # project root
 from config import load_env, get_api_key, detect_script
 
 URL = ("wss://dashscope-intl.aliyuncs.com/api-ws/v1/realtime"

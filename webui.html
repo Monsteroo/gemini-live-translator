@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Real-time перекладач (Qwen + GPT)</title>
+<title>Перекладач для Zoom</title>
 <style>
   :root {
     --bg:#0b0f14; --bg2:#0f141b;
@@ -62,7 +62,7 @@
   button { border:none; border-radius:10px; padding:9px 20px; font-size:13.5px; font-weight:650;
            font-family:inherit; cursor:pointer; transition:transform .08s, filter .15s, box-shadow .15s; }
   button:active { transform:translateY(1px); }
-  #startBtn { color:#05130d; background:linear-gradient(135deg,var(--in),var(--out));
+  #startBtn { padding:11px 28px; font-size:14.5px; color:#05130d; background:linear-gradient(135deg,var(--in),var(--out));
               box-shadow:0 4px 18px rgba(45,212,191,.28); }
   #startBtn.stop { color:#fff; background:linear-gradient(135deg,#fb7185,#ef4444);
                    box-shadow:0 4px 18px rgba(239,68,68,.28); }
@@ -102,6 +102,42 @@
   .hint { color:var(--faint); font-size:11.5px; padding:11px 18px; line-height:1.5;
           border-top:1px solid rgba(255,255,255,.05); }
 
+  /* ---------- latency test ---------- */
+  #latBtn { background:rgba(255,255,255,.05); color:var(--muted); padding:8px 14px; font-size:13px;
+            border:1px solid var(--glass-brd); box-shadow:none; }
+  #latBtn:hover:not(:disabled) { color:var(--txt); border-color:var(--accent); }
+  #latPanel { display:none; padding:12px 20px; border-top:1px solid var(--glass-brd);
+              background:rgba(0,0,0,.25); font-size:12.5px; }
+  #latPanel.show { display:block; }
+  #latPanel table { border-collapse:collapse; width:100%; max-width:900px; }
+  #latPanel th { text-align:left; color:var(--faint); font-weight:600; font-size:11px;
+                 letter-spacing:.4px; padding:4px 14px 6px 0; }
+  #latPanel td { padding:4px 14px 4px 0; color:#d3dbe4; }
+  #latPanel td.k { color:var(--muted); }
+  #latPanel .note { color:var(--faint); font-size:11.5px; margin-top:8px; line-height:1.5; max-width:900px; }
+  #latPanel b.good { color:var(--out); } #latPanel b.mid { color:#f0a868; } #latPanel b.bad { color:var(--err); }
+
+  /* ---------- settings bar / tools / empty states ---------- */
+  .bar { display:flex; align-items:flex-end; gap:18px; flex-wrap:wrap; padding:12px 20px;
+         border-bottom:1px solid var(--glass-brd); background:rgba(255,255,255,.02); }
+  .route { display:flex; align-items:flex-end; gap:10px; }
+  .arrow { color:var(--faint); font-size:18px; padding-bottom:6px; }
+  .fld { display:flex; flex-direction:column; gap:4px; }
+  .fld > span { font-size:11px; color:var(--faint); letter-spacing:.3px; }
+  .chk.mon { padding-bottom:7px; } .chk.mon em { color:#f0a868; font-style:normal; font-size:11.5px; }
+  .adv { padding-bottom:4px; } .adv summary { cursor:pointer; color:var(--muted); font-size:12.5px; padding:6px 0; }
+  .adv .fld { margin-top:6px; }
+  .log:empty::before { content:attr(data-ph); color:var(--faint); font-size:14px; font-weight:400;
+                       line-height:1.6; max-width:34ch; margin:auto; text-align:center; }
+  .tools { display:flex; align-items:center; gap:12px; padding:8px 20px; flex-wrap:wrap;
+           border-top:1px solid var(--glass-brd); background:rgba(0,0,0,.18); }
+  .tools .tl { font-size:11px; font-weight:700; letter-spacing:1.2px; text-transform:uppercase; color:var(--faint); }
+  .tools .th { font-size:11.5px; color:var(--faint); }
+  #status.err { color:var(--err); }
+  button:focus-visible, select:focus-visible, input:focus-visible, summary:focus-visible
+    { outline:2px solid var(--accent); outline-offset:2px; }
+  @media (max-width:760px) { main { grid-template-columns:1fr; } .bar { gap:12px; } }
+
   .devs { padding:9px 20px; font-size:11px; color:var(--faint); border-top:1px solid var(--glass-brd);
           background:rgba(0,0,0,.2); display:flex; gap:18px; flex-wrap:wrap; }
   .devs span b { color:var(--muted); font-weight:600; }
@@ -134,49 +170,72 @@
 <header>
   <div class="brand">
     <span class="dot" id="dot"></span>
-    <h1>Перекладач · Qwen + GPT</h1>
+    <h1>Перекладач для Zoom</h1>
   </div>
-  <span id="status">Підключення до сервера…</span>
+  <span id="status" role="status" aria-live="polite">Підключення до сервера…</span>
   <span id="cost" class="tnum" style="display:none"></span>
   <span class="spacer"></span>
-  <label class="chk">Движок:
-    <select id="engine">
-      <option value="gemini" selected>Gemini (1 модель)</option>
-      <option value="hybrid">Гібрид (Qwen+GPT)</option>
-    </select>
-  </label>
-  <label class="chk">Ви говорите:
-    <select id="hear"><option value="uk" selected>Українською</option></select>
-  </label>
-  <label class="chk">Співрозмовнику:
-    <select id="speak"></select>
-  </label>
-  <label class="chk">Мік:
-    <input type="text" id="mic" value="MacBook" size="8">
-  </label>
-  <label class="chk"><input type="checkbox" id="monitor"> чути свій переклад</label>
   <button id="helpBtn">❓ Як користуватися</button>
-  <button id="startBtn" disabled>Старт</button>
+  <button id="startBtn" disabled>▶ Старт</button>
 </header>
+
+<section class="bar" aria-label="Налаштування">
+  <div class="route">
+    <label class="fld"><span>Ви говорите</span>
+      <select id="hear"><option value="uk" selected>Українською</option></select></label>
+    <span class="arrow" aria-hidden="true">⇄</span>
+    <label class="fld"><span>Співрозмовник чує / говорить</span>
+      <select id="speak"></select></label>
+  </div>
+  <label class="fld"><span>Ваш мікрофон</span>
+    <input type="text" id="mic" value="MacBook" size="10" title="Частина назви мікрофона, напр. MacBook"></label>
+  <label class="chk mon" title="Лише в навушниках — інакше буде відлуння і зациклення">
+    <input type="checkbox" id="monitor"> Чути свій переклад
+    <em id="monWarn" hidden>⚠ тільки в навушниках!</em></label>
+  <details class="adv">
+    <summary>Додатково</summary>
+    <label class="fld"><span>Движок перекладу</span>
+      <select id="engine">
+        <option value="gemini" selected>Gemini (рекомендовано)</option>
+        <option value="hybrid">Гібрид (Qwen + GPT)</option>
+      </select></label>
+  </details>
+</section>
 
 <main>
   <section class="panel in">
-    <div class="phead in">← Співрозмовник <span class="tag">вашою мовою</span></div>
-    <div class="log" id="logIn"></div>
+    <div class="phead in">← Співрозмовник говорить <span class="tag">ви читаєте переклад</span></div>
+    <div class="log" id="logIn" data-ph="Тут з'явиться переклад слів співрозмовника українською. Натисніть «Старт»."></div>
     <div class="test">
       <input type="text" id="testText" value="Good afternoon! Thanks for arranging this call.">
       <button id="testBtn" disabled>🧪 Подати англійською</button>
     </div>
-    <div class="hint">Переклад слів співрозмовника (Qwen, текст). Кнопка «тест» імітує
-      англомовного співрозмовника — щоб перевірити цей напрямок без Zoom.</div>
+    <div class="hint">Кнопка «Подати англійською» імітує співрозмовника — перевірка без Zoom.</div>
   </section>
   <section class="panel out">
-    <div class="phead out">Ви <span class="tag">→ співрозмовнику, голос</span></div>
-    <div class="log" id="logOut"></div>
-    <div class="hint">Те, що чує співрозмовник (OpenAI, голос). Увімкніть «чути свій переклад»,
-      щоб контролювати його у навушниках.</div>
+    <div class="phead out">Ви говорите → <span class="tag">співрозмовник чує голос</span></div>
+    <div class="log" id="logOut" data-ph="Тут з'явиться текст того, що чує співрозмовник. Скажіть щось українською."></div>
+    <div class="hint">Увімкніть «Чути свій переклад» (в навушниках), щоб контролювати голос.</div>
   </section>
 </main>
+
+<section class="tools" aria-label="Перевірка системи">
+  <span class="tl">Перевірка системи</span>
+  <button id="latBtn" disabled title="Вимірює затримку обох напрямків (~40 с)">⏱ Тест затримки</button>
+  <span class="th">Спершу «Старт». Запускайте до дзвінка — співрозмовник почує тестові фрази.</span>
+</section>
+
+<div id="latPanel">
+  <table>
+    <thead><tr><th>Напрямок</th><th>Фраза</th><th>Перший текст</th><th>Звук отримано</th>
+      <th>Звук пішов у Zoom*</th><th>Хвіст після кінця фрази</th></tr></thead>
+    <tbody id="latRows"></tbody>
+  </table>
+  <div class="note">Усі часи — від початку фрази, у секундах. «Звук пішов у Zoom» — це те, що відчуває співрозмовник
+    (фраза 1 довша на ~0,5 с — стартовий буфер плеєра). *Плюс ~0,1–0,2 с буфера пристрою і затримка самого Zoom.
+    «Хвіст» — скільки ще чути переклад після того, як фраза закінчилась.
+    Результати дописуються у <code>latency_log.jsonl</code> — зручно порівнювати до/після змін.</div>
+</div>
 
 <div class="devs" id="devs"></div>
 
@@ -214,23 +273,38 @@
       <li><b>«чути свій переклад»</b> — почути власний англійський голос у навушниках (для соло-тесту).</li>
     </ul>
 
+    <h3>5. Тест затримки</h3>
+    <ul>
+      <li>Старт (движок Gemini) → <b>⏱ Тест затримки</b>. ~40 с: дві українські фрази «ви → співрозмовник» і одна англійська «співрозмовник → ви».</li>
+      <li>Не говоріть під час тесту. Запускайте <b>до дзвінка</b> — співрозмовник у Zoom почує тестові фрази.</li>
+      <li>Таблиця показує, коли з'явився текст, прийшов звук і пішов у Zoom. Історія — у <code>latency_log.jsonl</code>.</li>
+    </ul>
+
     <div class="warn">⏱ Затримка <b>3–4 секунди</b> — це норма для голосового перекладу (модель чекає кінець фрази, інакше ламається порядок слів). Швидше технологічно неможливо.</div>
   </div>
 </div>
 
 <script>
 const $ = id => document.getElementById(id);
-let ws, live = false;
+let ws, live = false, latRunning = false;
+
+function latCell(v, good, bad) {
+  if (v === null || v === undefined) return "—";
+  const c = v <= good ? "good" : (v <= bad ? "mid" : "bad");
+  return `<b class="${c}">${v.toFixed(1)} с</b>`;
+}
 
 function setStatus(state, text) {
   $("dot").className = "dot " + (state || "");
   $("status").textContent = text || "";
   live = (state === "live");
   const b = $("startBtn");
-  b.textContent = live ? "Стоп" : "Старт";
+  b.textContent = live ? "■ Стоп" : "▶ Старт";
+  $("status").classList.toggle("err", state === "error");
   b.classList.toggle("stop", live);
   b.disabled = false;
   $("testBtn").disabled = !live;
+  $("latBtn").disabled = !live || latRunning;
   $("cost").style.display = live ? "inline-block" : "none";
 }
 
@@ -264,9 +338,10 @@ function connect() {
       });
       // Gemini — основний; доступний лише за наявності GEMINI_API_KEY
       const ge = $("engine").querySelector('option[value=gemini]');
+      if (ge && !m.gemini) $("engine").closest('details').open = true;
       if (ge) {
         ge.disabled = !m.gemini;
-        ge.textContent = "Gemini (1 модель)" + (m.gemini ? "" : " — нема ключа");
+        ge.textContent = "Gemini (рекомендовано)" + (m.gemini ? "" : " — нема ключа");
         if (!m.gemini) $("engine").value = "hybrid";   // фолбек, якщо нема ключа
       }
     } else if (m.type === "status") {
@@ -277,6 +352,20 @@ function connect() {
         (m.monitor ? `<span><b>🔊 монітор:</b> ${m.monitor}</span>` : "");
     } else if (m.type === "line") {
       addLine(m.dir, m.text, m.final);
+    } else if (m.type === "latency_start") {
+      latRunning = true; $("latBtn").disabled = true;
+      $("latRows").innerHTML = ""; $("latPanel").classList.add("show");
+    } else if (m.type === "latency_row") {
+      const out = m.dir === "out";
+      $("latRows").insertAdjacentHTML("beforeend",
+        `<tr><td class="k">${out ? "Ви → співрозмовник (голос)" : "Співрозмовник → ви (текст)"}</td>` +
+        `<td>${out ? m.phrase : "3"} · ${m.speech.toFixed(1)} с</td>` +
+        `<td>${latCell(m.text, 3.5, 5)}</td>` +
+        `<td>${out ? latCell(m.audio_rx, 3.5, 5) : "—"}</td>` +
+        `<td>${out ? latCell(m.audio_play, 4, 5.5) : "—"}</td>` +
+        `<td>${latCell(m.tail, 2.5, 4)}</td></tr>`);
+    } else if (m.type === "latency_end") {
+      latRunning = false; $("latBtn").disabled = !live;
     } else if (m.type === "cost") {
       const mm = String(Math.floor(m.sec/60)).padStart(2,"0"), ss = String(m.sec%60).padStart(2,"0");
       $("cost").textContent = `⏱ ${mm}:${ss}  ·  ≈ $${m.usd}`;
@@ -298,6 +387,15 @@ $("startBtn").onclick = () => {
 $("testBtn").onclick = () => {
   if (!ws || ws.readyState !== 1 || !live) return;
   ws.send(JSON.stringify({cmd:"inject", text:$("testText").value.trim()}));
+};
+
+$("monitor").onchange = () => { $("monWarn").hidden = !$("monitor").checked; };
+
+$("latBtn").onclick = () => {
+  if (!ws || ws.readyState !== 1 || !live || latRunning) return;
+  if ($("engine").value !== "gemini") { alert("Тест затримки працює лише з движком Gemini."); return; }
+  if (!confirm("Тест ~40 с: підмінить мікрофон тестовими фразами, а співрозмовник у Zoom їх ЧУТИМЕ.\nЗапускайте до дзвінка або з вимкненим мікрофоном у Zoom. Продовжити?")) return;
+  ws.send(JSON.stringify({cmd:"latency"}));
 };
 
 // довідка

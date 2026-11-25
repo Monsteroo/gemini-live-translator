@@ -16,6 +16,7 @@ import wave
 import numpy as np
 import pyaudio
 
+import sys as _sys, pathlib as _pl; _sys.path.insert(0, str(_pl.Path(__file__).resolve().parent.parent))  # project root
 from config import find_device
 
 OPEN_RATE = int(sys.argv[1]) if len(sys.argv) > 1 else 24000

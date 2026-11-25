@@ -20,6 +20,7 @@ import asyncio
 
 import pyaudio
 
+import sys as _sys, pathlib as _pl; _sys.path.insert(0, str(_pl.Path(__file__).resolve().parent.parent))  # project root
 from config import load_env, get_api_key, LANGUAGES, VOICE_CAPABLE, find_device, list_devices
 from livetranslate_client import LiveTranslateClient
 

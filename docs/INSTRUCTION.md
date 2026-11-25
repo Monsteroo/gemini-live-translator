@@ -1,14 +1,18 @@
-# Setup guide — hybrid Zoom translator (Qwen + OpenAI)
+# Setup guide — Zoom voice translator (Gemini default, hybrid fallback)
 
-> **Hybrid:** the "other participant → you" direction runs on **Qwen**
-> (instant, free, text output); the "you → other participant" direction runs
-> on **OpenAI's `gpt-realtime-translate`** (spoken English, low latency).
-> **Both keys** are required in `.env`.
+> **Two engines** (switch in the web UI):
+> - **Gemini (default)** — `gemini-3.5-live-translate-preview` handles **both**
+>   directions, 70+ languages, Ukrainian works as spoken output. Needs only
+>   `GEMINI_API_KEY`.
+> - **Hybrid (fallback)** — "other participant → you" on **Qwen** (text),
+>   "you → other participant" on **OpenAI `gpt-realtime-translate`** (voice,
+>   13 output languages, **no Ukrainian**). Needs `DASHSCOPE_API_KEY` +
+>   `OPENAI_API_KEY`.
 >
-> Limitation: OpenAI only synthesizes ~13 languages (Ukrainian is **not**
-> one of them — that's why that leg stays on Qwen for text). `--clone` and
-> `--only-mine` **do nothing** in this mode (`gpt-realtime-translate` doesn't
-> clone voices). The other participant's voice is a generic one.
+> If Gemini is chosen but its key is missing, the app falls back to hybrid.
+> Neither engine clones voices — the other participant hears a generic voice.
+> The CLI scripts (`bidirectional.py`, sections 4–5 below) run the **hybrid**
+> engine only; the web UI supports both.
 
 ## 🌐 Web UI (easiest)
 
@@ -22,7 +26,7 @@ Opens `http://localhost:8000` in the browser:
 - right panel — what **the other participant hears** in English (the voice goes into Zoom).
 - "hear my own translation" checkbox — duplicates the English voice into your own headphones (for testing).
 
-Same engine underneath (Qwen text-in + OpenAI voice-out) — the browser is just the UI on top.
+The browser is just the UI on top; pick the engine (Gemini / Hybrid) in the top bar.
 Zoom and BlackHole are set up the same way (sections below). Ctrl+C in the terminal to quit.
 
 ## 0. Which devices to pick in Zoom
@@ -43,19 +47,24 @@ Create Aggregate Device → check one BlackHole → rename). The script still
 talks to the raw BlackHole device either way. Downside: an extra layer and
 possible resampling, so leaving it as-is is more reliable.
 
-## 1. One-time setup: two API keys
+## 1. One-time setup: API keys
 
-`.env` must contain **both** keys:
+`.env` for the default Gemini engine:
+```
+GEMINI_API_KEY=...         # Google AI Studio (aistudio.google.com) — both directions
+```
+Add these only if you want the hybrid fallback / CLI:
 ```
 DASHSCOPE_API_KEY=sk-...   # Qwen (international Model Studio console) — direction toward you
 OPENAI_API_KEY=sk-...      # OpenAI (platform.openai.com) — direction toward the other participant
 ```
 
-**Verify the OpenAI key + protocol** (no microphone needed, runs uk→en through the API):
+**Verify the keys + protocol** (no microphone needed, runs uk→en through the API):
 ```bash
-python3 probe_openai.py
+python3 tools/probe_gemini.py        # Gemini; `probe_gemini.py uk` checks Ukrainian voice
+python3 tools/probe_openai.py        # OpenAI (hybrid)
 ```
-Should print an English translation and return audio.
+Each should print a translation and return audio.
 
 ## 2. Zoom setup (check every time)
 
@@ -120,7 +129,7 @@ direction is noticeably faster. Still, **speak in complete phrases with
 short pauses** — the model synthesizes per finished clause (word order
 differs between languages, so word-by-word sync is impossible — that's a
 hard limit of the technology, not this implementation).
-- Verify the server accepts the VAD settings: `python3 probe_session.py`.
+- Verify the server accepts the VAD settings: `python3 tools/probe_session.py`.
 
 In the terminal:
 - `[← TO YOU] 🌐 …` — translation of what the other participant is saying (streamed)
@@ -196,25 +205,27 @@ python3 bidirectional.py --hear uk --speak en --clone --mic MacBook \
 
 ```bash
 # older quick scenarios:
-python3 selftest.py in            # speak English → read the translation in your language
-python3 selftest.py out --clone   # speak your language → hear English (your voice)
+python3 tools/selftest.py in            # speak English → read the translation in your language
+python3 tools/selftest.py out --clone   # speak your language → hear English (your voice)
 
 # full test over real virtual cables (2 terminals):
 python3 bidirectional.py --hear uk --speak en --clone --mic MacBook   # terminal 1
-python3 fake_zoom.py                                                   # terminal 2
+python3 tools/fake_zoom.py                                                   # terminal 2
 ```
 
 ## 6. Troubleshooting
 
 | Symptom | Fix |
 |---|---|
-| `DASHSCOPE_API_KEY not found` | add the key to `.env` |
+| `GEMINI_API_KEY not found` | add the key to `.env` (the web UI then falls back to hybrid) |
+| `DASHSCOPE_API_KEY not found` | add the key to `.env` (hybrid / CLI only) |
+| `ModuleNotFoundError: websockets` | you're on a Python without the deps; `pip install websockets pyaudio` or use the interpreter that has them |
 | HTTP 401 | key isn't from the international console (Singapore region) |
-| `Translate Speaker/... not found` | `sudo killall coreaudiod`, then `python3 list_devices.py` |
+| `Translate Speaker/... not found` | `sudo killall coreaudiod`, then `python3 tools/list_devices.py` |
 | Audio breaks up for the OTHER PARTICIPANT | in Zoom: Original Sound = On, Echo cancellation = Off, Background noise suppression = Low/Off (section 2) |
 | Audio breaks up for YOU (headphones) | speak into the MacBook mic (`--mic MacBook`), listen on headphones |
 | High latency | short sentences + pause; `--vad 300 --delay 0.4`; measure with `--latency` |
 | Other participant can't hear you | in Zoom, Microphone = `Translate Microphone`, Original Sound enabled |
 | SSL error | run `"/Applications/Python 3.14/Install Certificates.command"` |
 
-List devices any time: `python3 list_devices.py`
+List devices any time: `python3 tools/list_devices.py`

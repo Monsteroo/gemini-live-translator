@@ -486,15 +486,8 @@ class LiveTranslateClient:
         )
         if not self.quiet:
             print(f"{self.label}Microphone is on. Start speaking...")
-        try:
-            while self.is_connected:
-                audio_chunk = await asyncio.get_event_loop().run_in_executor(
-                    None, stream.read, self.input_chunk
-                )
-                await self.send_audio_chunk(audio_chunk)
-        finally:
-            stream.stop_stream()
-            stream.close()
+        from config import mic_loop
+        await mic_loop(stream, self.input_chunk, lambda: self.is_connected, self.send_audio_chunk)
 
     async def close(self):
         """Gracefully close the connection and release resources."""

@@ -15,6 +15,7 @@ import wave
 
 import websockets
 
+import sys as _sys, pathlib as _pl; _sys.path.insert(0, str(_pl.Path(__file__).resolve().parent.parent))  # project root
 from config import load_env, get_openai_key
 from openai_translate_client import API_URL, APPEND_TYPE
 

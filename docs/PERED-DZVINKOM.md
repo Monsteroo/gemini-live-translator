@@ -56,7 +56,7 @@ No second person needed, using the built-in test:
 
 - [ ] In the left panel, press **🧪 Simulate English input**.
 - [ ] Within 2–4s the **left panel** shows the **translated text** in your language.
-  → Confirms the incoming direction (Qwen) works: real English speech from the other participant will show up the same way.
+  → Confirms the incoming direction works (Gemini or Qwen, per the selected engine): real English speech from the other participant will show up the same way.
 
 ---
 

@@ -2,6 +2,7 @@
 """Показати всі аудіопристрої з індексами. Запустіть, щоб перевірити,
 що віртуальні кабелі видні системі."""
 import pyaudio
+import sys as _sys, pathlib as _pl; _sys.path.insert(0, str(_pl.Path(__file__).resolve().parent.parent))  # project root
 from config import list_devices, find_cable, CABLE_IN_NAMES, CABLE_OUT_NAMES
 
 pa = pyaudio.PyAudio()

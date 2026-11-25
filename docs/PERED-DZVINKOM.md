@@ -16,7 +16,7 @@ Go top to bottom. Takes ~3 minutes total. If any step fails — **don't start th
 ## 1. Launch the app
 
 ```bash
-cd "GPT real-time translator"
+cd gemini-live-translator
 python3 web.py
 ```
 

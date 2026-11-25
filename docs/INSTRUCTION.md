@@ -17,7 +17,7 @@
 ## 🌐 Web UI (easiest)
 
 ```bash
-cd "GPT real-time translator"
+cd gemini-live-translator
 python3 web.py
 ```
 Opens `http://localhost:8000` in the browser:
@@ -100,7 +100,7 @@ Turn these off:
 ## 4. Running the translator
 
 ```bash
-cd "GPT real-time translator"
+cd gemini-live-translator
 python3 bidirectional.py --hear uk --speak en --mic MacBook
 ```
 

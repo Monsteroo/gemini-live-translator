@@ -1,4 +1,4 @@
-# GPT Real-Time Translator (Zoom voice translator)
+# Gemini Live Translator (Zoom voice translator)
 
 Real-time bidirectional voice translator for Zoom calls, routed through
 virtual audio devices (BlackHole). Two interchangeable engines:
